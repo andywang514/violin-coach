@@ -59,6 +59,8 @@ export default function KaraokePractice() {
   const measureBoundariesRef = useRef<number[]>([])
   // Keep the latest loaded MusicXML text so user can set it as default later
   const lastLoadedXmlRef = useRef<string | null>(null)
+  // Input for loading a score from GitHub
+  const [githubInput, setGithubInput] = useState<string>("")
 
   const schedulerIdRef = useRef<number | null>(null)
   const isTransportRunningRef = useRef<boolean>(false)
@@ -527,6 +529,86 @@ export default function KaraokePractice() {
           console.log('Using estimated measure boundaries:', estimatedBoundaries)
         }
   }, [])
+
+  // Convert various GitHub inputs into a raw content URL
+  function toRawGithubUrl(input: string): string | null {
+    const s = (input || '').trim()
+    if (!s) return null
+    if (s.startsWith('https://raw.githubusercontent.com/')) return s
+    if (s.startsWith('https://github.com/')) {
+      // https://github.com/owner/repo/blob/branch/path -> raw
+      const parts = s.replace('https://github.com/', '').split('/')
+      if (parts.length >= 5 && parts[2] === 'blob') {
+        const [owner, repo, _blob, branch, ...path] = parts
+        return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path.join('/')}`
+      }
+      return null
+    }
+    // owner/repo/path (assume main branch)
+    const seg = s.split('/')
+    if (seg.length >= 3) {
+      const owner = seg[0]
+      const repo = seg[1]
+      const path = seg.slice(2).join('/')
+      const branch = 'main'
+      return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`
+    }
+    return null
+  }
+
+  const loadFromGithub = useCallback(async () => {
+    if (!osmdRef.current) return
+    const rawUrl = toRawGithubUrl(githubInput)
+    if (!rawUrl) {
+      setStatus('Enter a GitHub raw URL or owner/repo/path')
+      return
+    }
+    try {
+      setStatus('Loading from GitHub...')
+      const res = await fetch(rawUrl)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const text = await res.text()
+      if (!text.includes('<score-partwise') && !text.includes('<score-timewise')) {
+        throw new Error('Not a MusicXML file')
+      }
+      await osmdRef.current.load(text)
+      await osmdRef.current.render()
+      lastLoadedXmlRef.current = text
+      setStatus('GitHub score loaded')
+      // Reset gating/target similarly to loadSample
+      const cursor = osmdRef.current.cursor
+      cursor.show()
+      ensureCursorOnNote(cursor)
+      const g = getNotesUnderCursor(cursor as any)[0]
+      const m = g ? midiFromGraphicalNote(g) : null
+      setFirstNoteMidi(m)
+      if (m != null) setTargetInfo({ midi: m, hz: midiToFrequency(m, a4FrequencyHz), name: midiToName(m) })
+      // Rebuild sequence from XML (minimal)
+      try {
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(text, 'application/xml')
+        const noteEls = Array.from(doc.getElementsByTagName('note'))
+        const seq: MusicalElement[] = []
+        const stepToSemitone: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+        for (const n of noteEls) {
+          if (n.getElementsByTagName('rest')[0]) continue
+          const p = n.getElementsByTagName('pitch')[0]
+          if (!p) continue
+          const step = p.getElementsByTagName('step')[0]?.textContent || 'C'
+          const alterTxt = p.getElementsByTagName('alter')[0]?.textContent
+          const alter = alterTxt ? parseInt(alterTxt, 10) : 0
+          const octave = parseInt(p.getElementsByTagName('octave')[0]?.textContent || '4', 10)
+          const midi = (octave + 1) * 12 + (stepToSemitone[step] ?? 0) + alter
+          if (midi >= 21 && midi <= 108) seq.push({ midi })
+        }
+        scoreMidiSequenceRef.current = seq
+        currentStepIndexRef.current = 0
+        lastTargetMidiRef.current = seq[0]?.midi ?? m ?? null
+      } catch {}
+    } catch (e) {
+      setStatus(`Failed to load from GitHub: ${e instanceof Error ? e.message : 'error'}`)
+    }
+  }, [githubInput, a4FrequencyHz])
 
 
 
@@ -1364,6 +1446,23 @@ export default function KaraokePractice() {
         </label>
         <button className="btn btn-secondary" onClick={loadSample} disabled={isListening}>
           Load Default
+        </button>
+        <input
+          type="text"
+          placeholder="owner/repo/path.xml or GitHub URL"
+          value={githubInput}
+          onChange={(e) => setGithubInput(e.target.value)}
+          style={{
+            width: '320px',
+            height: '32px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            padding: '0 8px',
+            fontSize: '0.9rem'
+          }}
+        />
+        <button className="btn" onClick={loadFromGithub} disabled={isListening}>
+          Load from GitHub
         </button>
         <button
           className="btn"
