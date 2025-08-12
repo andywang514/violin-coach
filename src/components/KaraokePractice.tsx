@@ -61,6 +61,21 @@ export default function KaraokePractice() {
   const lastLoadedXmlRef = useRef<string | null>(null)
   // Input for loading a score from GitHub
   const [githubInput, setGithubInput] = useState<string>("")
+  const bundledScores = useMemo(
+    () => [
+      { label: 'Seiffert D Major Op.24', path: '/scores/Seiffert D Major Op24.musicxml' },
+      { label: 'Complex Sample', path: '/scores/complex-sample.musicxml' },
+      { label: 'GDAE Exercise', path: '/scores/gdae-exercise.musicxml' },
+      { label: 'Twinkle Twinkle', path: '/scores/twinkle-twinkle.musicxml' },
+      { label: 'Mary Had A Little Lamb', path: '/scores/mary-had-a-little-lamb.musicxml' },
+      { label: 'Open Strings', path: '/scores/open-strings.musicxml' },
+      { label: 'Sample', path: '/scores/sample.musicxml' },
+    ],
+    []
+  )
+  const [selectedScore, setSelectedScore] = useState<string>(
+    '/scores/Seiffert D Major Op24.musicxml'
+  )
 
   const schedulerIdRef = useRef<number | null>(null)
   const isTransportRunningRef = useRef<boolean>(false)
@@ -529,6 +544,81 @@ export default function KaraokePractice() {
           console.log('Using estimated measure boundaries:', estimatedBoundaries)
         }
   }, [])
+
+  const loadBundledScore = useCallback(async () => {
+    if (!osmdRef.current) return
+    try {
+      // Reset state (same as loadSample)
+      setStabilizedPitch({ frequencyHz: null, cents: null })
+      setTargetInfo({ midi: null, hz: null, name: null })
+      setFirstNoteMidi(null)
+      setAwaitingFirstCorrect(true)
+      setNoteMarksState([])
+      currentStepIndexRef.current = 0
+      lastTargetMidiRef.current = null
+      scoreMidiSequenceRef.current = []
+      windowHadAccurateRef.current = false
+      windowHadAnyPitchRef.current = false
+      if (schedulerIdRef.current) {
+        clearTimeout(schedulerIdRef.current)
+        schedulerIdRef.current = null
+      }
+      setIsTransportRunning(false)
+      isTransportRunningRef.current = false
+
+      setStatus('Loading score...')
+      const res = await fetch(selectedScore)
+      if (!res.ok) throw new Error('Failed to fetch score')
+      const text = await res.text()
+      await osmdRef.current.load(text)
+      await osmdRef.current.render()
+      lastLoadedXmlRef.current = text
+      const cursor = osmdRef.current.cursor
+      cursor.show()
+      ensureCursorOnNote(cursor)
+      setAwaitingFirstCorrect(true)
+
+      // Determine first note/target
+      let midi = parseFirstNoteMidiFromXml(text)
+      if (midi == null) {
+        const notes = getNotesUnderCursor(cursor as any)
+        const g = notes[0]
+        midi = g ? midiFromGraphicalNote(g) : null
+      }
+      setFirstNoteMidi(midi)
+      if (midi != null) {
+        const hz = midiToFrequency(midi, a4FrequencyHz)
+        setTargetInfo({ midi, hz, name: midiToName(midi) })
+      }
+
+      // Rebuild simple sequence
+      try {
+        const seq: MusicalElement[] = []
+        const parser = new DOMParser()
+        const doc = parser.parseFromString(text, 'application/xml')
+        const noteEls = Array.from(doc.getElementsByTagName('note'))
+        const stepToSemitone: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }
+        for (const n of noteEls) {
+          if (n.getElementsByTagName('rest')[0]) continue
+          const p = n.getElementsByTagName('pitch')[0]
+          if (!p) continue
+          const step = p.getElementsByTagName('step')[0]?.textContent || 'C'
+          const alterText = p.getElementsByTagName('alter')[0]?.textContent
+          const alter = alterText ? parseInt(alterText, 10) : 0
+          const octave = parseInt(p.getElementsByTagName('octave')[0]?.textContent || '4', 10)
+          const midi = (octave + 1) * 12 + (stepToSemitone[step] ?? 0) + alter
+          if (midi >= 21 && midi <= 108) seq.push({ midi })
+        }
+        scoreMidiSequenceRef.current = seq
+        currentStepIndexRef.current = 0
+        lastTargetMidiRef.current = seq[0]?.midi ?? midi ?? null
+      } catch {}
+
+      setStatus('Score loaded')
+    } catch (e) {
+      setStatus('Error loading score')
+    }
+  }, [selectedScore, a4FrequencyHz])
 
   // Convert various GitHub inputs into a raw content URL
   function toRawGithubUrl(input: string): string | null {
@@ -1444,6 +1534,23 @@ export default function KaraokePractice() {
         <label htmlFor="musicxml-file" className="file-label">
           Upload MusicXML
         </label>
+        <select
+          value={selectedScore}
+          onChange={(e) => setSelectedScore(e.target.value)}
+          style={{
+            height: '32px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            padding: '0 6px'
+          }}
+        >
+          {bundledScores.map((s) => (
+            <option key={s.path} value={s.path}>{s.label}</option>
+          ))}
+        </select>
+        <button className="btn" onClick={loadBundledScore} disabled={isListening}>
+          Load Selected
+        </button>
         <button className="btn btn-secondary" onClick={loadSample} disabled={isListening}>
           Load Default
         </button>
