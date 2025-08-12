@@ -415,9 +415,22 @@ export default function KaraokePractice() {
     const cursor = osmdRef.current.cursor
     cursor.show()
     cursorRef.current = cursor
-    // Ensure cursor starts on a notehead, not between events
-    const onNote = ensureCursorOnNote(cursor)
-    setStatus(onNote ? 'Ready' : 'Ready (advanced to first note)')
+    // Position to saved start measure if present, else ensure first note
+    let positioned = false
+    if (savedConfigRaw) {
+      try {
+        const cfg = JSON.parse(savedConfigRaw)
+        if (typeof cfg.startMeasure === 'number') {
+          positioned = positionCursorToMeasureFirstNote(cfg.startMeasure)
+        }
+      } catch {}
+    }
+    if (!positioned) {
+      const onNote = ensureCursorOnNote(cursor)
+      setStatus(onNote ? 'Ready' : 'Ready (advanced to first note)')
+    } else {
+      setStatus('Ready')
+    }
     setAwaitingFirstCorrect(true)
 
     // Parse first target note from XML for robust start gating
@@ -822,6 +835,49 @@ export default function KaraokePractice() {
     return null
   }
 
+  // Helper: position cursor to the first note of a given measure and update Target/UI
+  const positionCursorToMeasureFirstNote = useCallback((measure: number) => {
+    const osmd = osmdRef.current
+    const cursor = osmd?.cursor
+    if (!osmd || !cursor || !Number.isFinite(measure) || measure < 1) return false
+    const firstTs = getFirstNoteTimestampForMeasure(osmd as any, measure)
+    cursor.reset()
+    let guard = 0
+    while (guard++ < 4096) {
+      const curMeasure = (cursor as any)?.Iterator?.CurrentMeasureIndex + 1 || 1
+      const curTs = getTimestampReal((cursor as any)?.Iterator?.CurrentTimeStamp)
+      if (curMeasure > measure) break
+      if (curMeasure === measure) {
+        if (firstTs == null || (typeof curTs === 'number' && curTs >= firstTs)) break
+      }
+      cursor.next()
+    }
+    // ensure on a note within measure
+    let tries = 0
+    while (tries++ < 256) {
+      const curMeasure = (cursor as any)?.Iterator?.CurrentMeasureIndex + 1 || 1
+      if (curMeasure !== measure) break
+      const notes = getNotesUnderCursor(cursor as any)
+      if (notes?.length) break
+      cursor.next()
+    }
+    cursor.show()
+    const notesNow = getNotesUnderCursor(cursor as any)
+    const g = selectPrimaryNoteFromArray(notesNow)
+    const midi = g ? midiFromGraphicalNote(g) : null
+    const idx = (cursor as any)?.Iterator?.CurrentMeasureIndex
+    if (typeof idx === 'number') {
+      setCurrentMeasure(idx + 1)
+      setMeasureNumber(idx + 1)
+    }
+    if (midi != null) {
+      setTargetInfo({ midi, hz: midiToFrequency(midi, a4FrequencyHz), name: midiToName(midi) })
+      lastTargetMidiRef.current = midi
+      return true
+    }
+    return false
+  }, [a4FrequencyHz])
+
   function parseFirstNoteMidiFromXml(xml: string): number | null {
     try {
       const parser = new DOMParser()
@@ -917,26 +973,38 @@ export default function KaraokePractice() {
     setIsTransportRunning(false)
     isTransportRunningRef.current = false
 
-    // Re-center cursor on a note and lock target to it
-    const cursor = osmdRef.current?.cursor
-    if (cursor) {
-      ensureCursorOnNote(cursor)
-      cursor.show()
-      const notes = getNotesUnderCursor(cursor as any)
-      const n = selectPrimaryNoteFromArray(notes)
-      const midi = n ? midiFromGraphicalNote(n) : null
-      if (midi != null) {
-        setTargetInfo({ midi, hz: midiToFrequency(midi, a4FrequencyHz), name: midiToName(midi) })
-        lastTargetMidiRef.current = midi
-      }
-      const idx = (cursor as any)?.Iterator?.CurrentMeasureIndex
-      if (typeof idx === 'number') {
-        setCurrentMeasure(idx + 1)
-        setMeasureNumber(idx + 1)
+    // Jump back to saved start measure if configured, else to first note
+    const savedConfigRaw = localStorage.getItem('violinCoachDefaults')
+    let done = false
+    if (savedConfigRaw) {
+      try {
+        const cfg = JSON.parse(savedConfigRaw)
+        if (typeof cfg.startMeasure === 'number') {
+          done = positionCursorToMeasureFirstNote(cfg.startMeasure)
+        }
+      } catch {}
+    }
+    if (!done) {
+      const cursor = osmdRef.current?.cursor
+      if (cursor) {
+        ensureCursorOnNote(cursor)
+        cursor.show()
+        const notes = getNotesUnderCursor(cursor as any)
+        const n = selectPrimaryNoteFromArray(notes)
+        const midi = n ? midiFromGraphicalNote(n) : null
+        if (midi != null) {
+          setTargetInfo({ midi, hz: midiToFrequency(midi, a4FrequencyHz), name: midiToName(midi) })
+          lastTargetMidiRef.current = midi
+        }
+        const idx = (cursor as any)?.Iterator?.CurrentMeasureIndex
+        if (typeof idx === 'number') {
+          setCurrentMeasure(idx + 1)
+          setMeasureNumber(idx + 1)
+        }
       }
     }
     setStatus('Ready')
-  }, [stopListening, stopTransport, stopMetronome, ensureCursorOnNote, bpm, a4FrequencyHz])
+  }, [stopListening, stopTransport, stopMetronome, ensureCursorOnNote, bpm, a4FrequencyHz, positionCursorToMeasureFirstNote])
 
   const startTransport = useCallback(() => {
     if (isTransportRunning) return
@@ -1572,6 +1640,7 @@ export default function KaraokePractice() {
                 dynamicTempoEnabled,
                 selectedScore,
                 xml,
+                startMeasure: measureNumber,
               }
               try {
                 localStorage.setItem('violinCoachDefaults', JSON.stringify(cfg))
