@@ -57,6 +57,8 @@ export default function KaraokePractice() {
   const [measureNumber, setMeasureNumber] = useState<number>(1)
   const [currentMeasure, setCurrentMeasure] = useState<number>(1)
   const measureBoundariesRef = useRef<number[]>([])
+  // Keep the latest loaded MusicXML text so user can set it as default later
+  const lastLoadedXmlRef = useRef<string | null>(null)
 
   const schedulerIdRef = useRef<number | null>(null)
   const isTransportRunningRef = useRef<boolean>(false)
@@ -345,6 +347,8 @@ export default function KaraokePractice() {
     isTransportRunningRef.current = false
     
     setStatus('Loading Seiffert Concertino...')
+    // Prefer a user-saved default from localStorage
+    const saved = localStorage.getItem('violinCoachDefaultXML')
     const candidates = [
       '/scores/Seiffert D Major Op24.musicxml',
       '/scores/complex-sample.musicxml',
@@ -355,22 +359,27 @@ export default function KaraokePractice() {
       '/scores/sample.musicxml',
     ]
     let text = ''
-    for (const url of candidates) {
-      try {
-        const res = await fetch(url)
-        if (!res.ok) continue
-        const t = await res.text()
-        if (t.trim().startsWith('<?xml') || t.includes('<score-partwise') || t.includes('<score-timewise')) {
-          text = t
-          break
+    if (saved) {
+      text = saved
+    } else {
+      for (const url of candidates) {
+        try {
+          const res = await fetch(url)
+          if (!res.ok) continue
+          const t = await res.text()
+          if (t.trim().startsWith('<?xml') || t.includes('<score-partwise') || t.includes('<score-timewise')) {
+            text = t
+            break
+          }
+        } catch {
+          // try next
         }
-      } catch {
-        // try next
       }
     }
     if (!text) throw new Error('No sample could be loaded')
     await osmdRef.current.load(text)
     await osmdRef.current.render()
+    lastLoadedXmlRef.current = text
     const cursor = osmdRef.current.cursor
     cursor.show()
     cursorRef.current = cursor
@@ -1354,7 +1363,21 @@ export default function KaraokePractice() {
           Upload MusicXML
         </label>
         <button className="btn btn-secondary" onClick={loadSample} disabled={isListening}>
-          Load Sample
+          Load Default
+        </button>
+        <button
+          className="btn"
+          onClick={() => {
+            if (lastLoadedXmlRef.current) {
+              localStorage.setItem('violinCoachDefaultXML', lastLoadedXmlRef.current)
+              setStatus('Default score saved')
+            } else {
+              setStatus('No score loaded to save')
+            }
+          }}
+          disabled={isListening}
+        >
+          Set as Default
         </button>
         <span className="practice-status">{status}</span>
       </div>

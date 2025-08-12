@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import './App.css'
 import Tuner from './components/Tuner'
-import SheetViewer from './components/SheetViewer'
 import KaraokePractice from './components/KaraokePractice'
 
-type Tab = 'practice' | 'tuner' | 'viewer'
+type Tab = 'practice' | 'tuner'
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('practice')
@@ -26,19 +25,14 @@ export default function App() {
           >
             Tuner
           </button>
-          <button 
-            className={`tab-button ${activeTab === 'viewer' ? 'active' : ''}`}
-            onClick={() => setActiveTab('viewer')}
-          >
-            Sheet Viewer
-          </button>
+          
         </nav>
       </header>
       
       <main className="app-main">
         {activeTab === 'practice' && <KaraokePractice />}
         {activeTab === 'tuner' && <Tuner />}
-        {activeTab === 'viewer' && <SheetViewer />}
+        
       </main>
     </div>
   )
