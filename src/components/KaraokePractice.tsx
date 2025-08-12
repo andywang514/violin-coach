@@ -883,6 +883,61 @@ export default function KaraokePractice() {
     isTransportRunningRef.current = false
   }, [])
 
+  const restartPractice = useCallback(() => {
+    // Stop any running audio/transport/metronome
+    try { stopListening() } catch {}
+    try { stopTransport() } catch {}
+    try { stopMetronome() } catch {}
+
+    // Cancel animation/timers
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    if (schedulerIdRef.current) {
+      clearTimeout(schedulerIdRef.current)
+      schedulerIdRef.current = null
+    }
+
+    // Clear grading marks and state
+    noteMarksRef.current = []
+    setNoteMarksState([])
+    windowHadAccurateRef.current = false
+    windowHadAnyPitchRef.current = false
+    setAwaitingFirstCorrect(true)
+    awaitingFirstCorrectRef.current = true
+
+    // Reset tempo adjustments back to configured BPM
+    setCurrentBpm(bpm)
+    consecutiveErrorsRef.current = 0
+    lastErrorTimeRef.current = 0
+    lastCorrectTimeRef.current = null
+    prevCorrectTimeRef.current = null
+
+    setIsTransportRunning(false)
+    isTransportRunningRef.current = false
+
+    // Re-center cursor on a note and lock target to it
+    const cursor = osmdRef.current?.cursor
+    if (cursor) {
+      ensureCursorOnNote(cursor)
+      cursor.show()
+      const notes = getNotesUnderCursor(cursor as any)
+      const n = selectPrimaryNoteFromArray(notes)
+      const midi = n ? midiFromGraphicalNote(n) : null
+      if (midi != null) {
+        setTargetInfo({ midi, hz: midiToFrequency(midi, a4FrequencyHz), name: midiToName(midi) })
+        lastTargetMidiRef.current = midi
+      }
+      const idx = (cursor as any)?.Iterator?.CurrentMeasureIndex
+      if (typeof idx === 'number') {
+        setCurrentMeasure(idx + 1)
+        setMeasureNumber(idx + 1)
+      }
+    }
+    setStatus('Ready')
+  }, [stopListening, stopTransport, stopMetronome, ensureCursorOnNote, bpm, a4FrequencyHz])
+
   const startTransport = useCallback(() => {
     if (isTransportRunning) return
     const cursor = osmdRef.current?.cursor
@@ -1448,7 +1503,7 @@ export default function KaraokePractice() {
               </div>
             </div>
             
-            {/* Action button */}
+            {/* Action buttons */}
             <button 
               className="btn" 
               onClick={isListening ? stopListening : listen} 
@@ -1462,6 +1517,13 @@ export default function KaraokePractice() {
               }}
             >
               {isListening ? 'Stop Listening' : 'Start Listening'}
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={restartPractice}
+              style={{ height: '36px', fontSize: '0.9rem', fontWeight: 600 }}
+            >
+              Restart Practice
             </button>
           </div>
         </div>
