@@ -1,0 +1,294 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.app-header {
+  background: rgba(102, 126, 234, 0.9);
+  color: white;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.app-header h1 {
+  margin: 0 0 1rem 0;
+  font-size: 1.8rem;
+  font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.tab-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.tab-button {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(5px);
+}
+
+.tab-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  color: white;
+  transform: translateY(-2px);
+}
+
+.tab-button.active {
+  background: rgba(255, 255, 255, 0.9);
+  color: #667eea;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.app-main {
+  flex: 1;
+  padding: 2rem;
+  background: transparent;
+}
+
+/* Component-specific styles */
+.component-container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  max-width: 1200px;
+  margin: 0 auto;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.component-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 1.5rem;
+  color: #667eea;
+  text-align: center;
+}
+
+/* Practice area specific styles */
+.practice-container {
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 16px;
+  padding: 2rem;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.3);
+  max-width: 1400px;
+  margin: 0 auto;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.practice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.practice-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.practice-status {
+  font-weight: 500;
+  color: #667eea;
+}
+
+/* Sheet music area */
+.sheet-container {
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 12px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.9);
+  margin-bottom: 1rem;
+  position: relative;
+  min-height: 400px;
+  backdrop-filter: blur(5px);
+}
+
+/* File upload styles */
+.file-upload {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.file-input {
+  display: none;
+}
+
+.file-label {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.file-label:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+/* Button styles */
+.btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+}
+
+.btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: linear-gradient(135deg, #a8a4e6 0%, #b8a9c9 100%);
+}
+
+.btn-secondary:hover {
+  background: linear-gradient(135deg, #9b97d9 0%, #a99bb8 100%);
+}
+
+/* Input styles */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.input-group label {
+  font-weight: 500;
+  color: #667eea;
+}
+
+.input-group input {
+  padding: 0.5rem;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 6px;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+/* Checkbox styles */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+.checkbox-group label {
+  font-weight: 500;
+  color: #667eea;
+  cursor: pointer;
+}
+
+/* Practice info styles */
+.practice-info {
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 1rem;
+  }
+  
+  .tab-nav {
+    flex-wrap: wrap;
+  }
+  
+  .tab-button {
+    flex: 1;
+    min-width: 80px;
+  }
+  
+  .app-main {
+    padding: 1rem;
+  }
+  
+  .practice-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .practice-controls {
+    justify-content: center;
+  }
+}
+
+/* Metronome integration styles */
+.metronome-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+  border: 1px solid rgba(102, 126, 234, 0.2);
+}
+
+.metronome-toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+.metronome-toggle label {
+  font-weight: 500;
+  color: #667eea;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
