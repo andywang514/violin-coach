@@ -1112,15 +1112,8 @@ export default function KaraokePractice() {
 
         // Do not override target while idle; target is set explicitly by jump/listen
 
-        // Keep the visual Target in sync with the effective MIDI we are grading against when idle
-        if (!isTransportRunningRef.current && effectiveMidi != null && effectiveMidi >= VIOLIN_MIN_MIDI && effectiveMidi <= VIOLIN_MAX_MIDI) {
-          const eff = effectiveMidi
-          setTargetInfo(prev => {
-            if (prev.midi === eff && prev.hz) return prev
-            const hz = midiToFrequency(eff, a4FrequencyHz)
-            return { midi: eff, hz, name: midiToName(eff) }
-          })
-        }
+        // Do NOT auto-update the visible Target while listening; keep it locked to the
+        // user-selected cursor note until transport advances to the next note.
 
         // Require a brief stability before starting transport
         const stableForMsRef = (listen as any)._stableForMsRef || ((listen as any)._stableForMsRef = { t: 0 })
