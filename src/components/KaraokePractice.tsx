@@ -91,6 +91,9 @@ export default function KaraokePractice() {
   // Dynamic tempo refs
   const consecutiveErrorsRef = useRef<number>(0)
   const lastErrorTimeRef = useRef<number>(0)
+  // Tempo follower timestamps (for aligning to performer pace)
+  const lastCorrectTimeRef = useRef<number | null>(null)
+  const prevCorrectTimeRef = useRef<number | null>(null)
   
   type Mark = { x: number; y: number; kind: 'correct' | 'incorrect' | 'missed' }
   const [noteMarks, setNoteMarksState] = useState<Mark[]>([])
@@ -164,9 +167,9 @@ export default function KaraokePractice() {
       consecutiveErrorsRef.current++
       lastErrorTimeRef.current = now
       
-      // Slow down after 2 consecutive errors
+      // Slow down gently after 2 consecutive errors (tempo follower bias)
       if (consecutiveErrorsRef.current >= 2) {
-        const newBpm = Math.max(40, currentBpm - 8) // Slow down by 8 BPM, minimum 40
+        const newBpm = Math.max(40, Math.round(currentBpm * 0.95)) // −5%
         setCurrentBpm(newBpm)
         console.log(`Slowing down to ${newBpm} BPM due to ${consecutiveErrorsRef.current} consecutive errors`)
       }
@@ -175,12 +178,10 @@ export default function KaraokePractice() {
       consecutiveErrorsRef.current = 0
       
       // Speed up gradually if no recent errors
-      if (now - lastErrorTimeRef.current > 5000) { // 5 seconds without errors
-        const newBpm = Math.min(bpm, currentBpm + 2) // Speed up by 2 BPM, max to original BPM
-        if (newBpm !== currentBpm) {
-          setCurrentBpm(newBpm)
-          console.log(`Speeding up to ${newBpm} BPM due to good performance`)
-        }
+      if (now - lastErrorTimeRef.current > 5000) { // 5s without errors
+        const candidate = Math.round(currentBpm * 1.03) // +3%
+        const newBpm = Math.min(bpm, candidate) // cap to original BPM
+        if (newBpm !== currentBpm) setCurrentBpm(newBpm)
       }
     }
   }, [dynamicTempoEnabled, currentBpm, bpm])
@@ -362,8 +363,23 @@ export default function KaraokePractice() {
     isTransportRunningRef.current = false
     
     setStatus('Loading Seiffert Concertino...')
-    // Prefer a user-saved default from localStorage
-    const saved = localStorage.getItem('violinCoachDefaultXML')
+    // Prefer user-saved defaults from localStorage (includes settings)
+    const savedConfigRaw = localStorage.getItem('violinCoachDefaults')
+    let savedXml: string | null = null
+    let savedSelectedScore: string | null = null
+    if (savedConfigRaw) {
+      try {
+        const cfg = JSON.parse(savedConfigRaw)
+        if (typeof cfg.bpm === 'number') {
+          setBpm(cfg.bpm)
+          setCurrentBpm(cfg.bpm)
+        }
+        if (typeof cfg.metronomeEnabled === 'boolean') setMetronomeEnabled(cfg.metronomeEnabled)
+        if (typeof cfg.dynamicTempoEnabled === 'boolean') setDynamicTempoEnabled(cfg.dynamicTempoEnabled)
+        if (typeof cfg.selectedScore === 'string') savedSelectedScore = cfg.selectedScore
+        if (typeof cfg.xml === 'string') savedXml = cfg.xml
+      } catch {}
+    }
     const candidates = [
       '/scores/Seiffert D Major Op24.musicxml',
       '/scores/complex-sample.musicxml',
@@ -374,10 +390,11 @@ export default function KaraokePractice() {
       '/scores/sample.musicxml',
     ]
     let text = ''
-    if (saved) {
-      text = saved
+    if (savedXml) {
+      text = savedXml
     } else {
-      for (const url of candidates) {
+      const toTry = savedSelectedScore ? [savedSelectedScore, ...candidates] : candidates
+      for (const url of toTry) {
         try {
           const res = await fetch(url)
           if (!res.ok) continue
@@ -916,6 +933,20 @@ export default function KaraokePractice() {
           if (wasAccurate) {
             const currentElement = seq[currentStepIndexRef.current ?? 0]
             const threshold = getGradingThreshold(currentElement)
+            // Tempo follower: estimate observed pace from correct hits
+            prevCorrectTimeRef.current = lastCorrectTimeRef.current
+            lastCorrectTimeRef.current = performance.now()
+            if (dynamicTempoEnabled && prevCorrectTimeRef.current != null) {
+              const observedSec = (lastCorrectTimeRef.current - prevCorrectTimeRef.current) / 1000
+              if (observedSec > 0.05) {
+                const observedBpm = Math.max(30, Math.min(220, Math.round(60 / observedSec)))
+                const blended = Math.round(currentBpm * 0.85 + observedBpm * 0.15)
+                const lower = Math.round(bpm * 0.85)
+                const upper = Math.round(bpm * 1.15)
+                const clamped = Math.max(lower, Math.min(upper, blended))
+                if (clamped !== currentBpm) setCurrentBpm(clamped)
+              }
+            }
             console.log(`✓ Correct: ${midiToName(currentElement?.midi ?? 0)} (threshold: ±${threshold} cents)`)
           } else if (windowHadAnyPitchRef.current) {
             const currentElement = seq[currentStepIndexRef.current ?? 0]
@@ -1471,9 +1502,21 @@ export default function KaraokePractice() {
         <button
           className="btn"
           onClick={() => {
-            if (lastLoadedXmlRef.current) {
-              localStorage.setItem('violinCoachDefaultXML', lastLoadedXmlRef.current)
-              setStatus('Default score saved')
+            const xml = lastLoadedXmlRef.current
+            if (xml) {
+              const cfg = {
+                bpm,
+                metronomeEnabled,
+                dynamicTempoEnabled,
+                selectedScore,
+                xml,
+              }
+              try {
+                localStorage.setItem('violinCoachDefaults', JSON.stringify(cfg))
+                setStatus('Default settings saved')
+              } catch {
+                setStatus('Failed to save defaults')
+              }
             } else {
               setStatus('No score loaded to save')
             }
