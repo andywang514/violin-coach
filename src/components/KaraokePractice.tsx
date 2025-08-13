@@ -1183,34 +1183,24 @@ export default function KaraokePractice() {
 
       // Cursor should already be positioned by jumpToMeasure, just ensure it's on a note
       const cursor = osmdRef.current?.cursor
-      console.log(`🎯 Cursor check: customStartIndex = ${customStartIndex}, cursor exists = ${!!cursor}`)
+      console.log(`🎯 Cursor check: cursor exists = ${!!cursor}`)
       if (cursor) {
-        if (customStartIndex !== null && customStartIndex > 0) {
-          // Cursor should already be positioned correctly by jumpToMeasure
-          console.log(`Cursor should already be at measure ${measureNumber} - target: ${midiToName(scoreMidiSequenceRef.current[customStartIndex]?.midi)}`)
-          
-          ensureCursorOnNote(cursor)
-          cursor.show()
-          
-          // Verify cursor position
-      const notes = getNotesUnderCursor(cursor as any)
-      const currentNote = selectPrimaryNoteFromArray(notes)
-          const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
-          const expectedMidi = scoreMidiSequenceRef.current[customStartIndex]?.midi
-          
-          console.log(`Cursor at: ${currentMidi ? midiToName(currentMidi) : 'null'} (target: ${expectedMidi ? midiToName(expectedMidi) : 'null'})`)
-          
-          if (currentMidi === expectedMidi) {
-            console.log(`✅ SUCCESS: Cursor is on the correct target note!`)
-            setStatus(`✅ Cursor positioned correctly at measure ${measureNumber}`)
-          } else {
-            console.log(`⚠️ Cursor is not on exact target note`)
-            setStatus(`⚠️ Cursor near measure ${measureNumber} - target note: ${expectedMidi ? midiToName(expectedMidi) : 'unknown'}`)
-          }
-          
-          console.log(`🎯 IMPORTANT: Target note is ${expectedMidi ? midiToName(expectedMidi) : 'unknown'} - play this note to start!`)
+        ensureCursorOnNote(cursor)
+        cursor.show()
+        
+        // Get the current cursor note for debugging
+        const notes = getNotesUnderCursor(cursor as any)
+        const currentNote = selectPrimaryNoteFromArray(notes)
+        const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
+        const currentMeasure = (cursor as any)?.Iterator?.CurrentMeasureIndex + 1
+        
+        console.log(`🎯 Cursor positioned at measure ${currentMeasure}, note: ${currentMidi ? midiToName(currentMidi) : 'null'}`)
+        console.log(`🎯 Target info: ${targetInfo.midi ? midiToName(targetInfo.midi) : 'null'}`)
+        
+        if (currentMidi !== null) {
+          setStatus(`✅ Ready to listen at measure ${currentMeasure}, note ${midiToName(currentMidi)}`)
         } else {
-          ensureCursorOnNote(cursor)
+          setStatus(`⚠️ Could not determine note at measure ${currentMeasure}`)
         }
       }
       
@@ -1323,26 +1313,32 @@ export default function KaraokePractice() {
               const cursorCents = hasPitch && cursorHz ? computeCentsOffset(freq, cursorHz) : null
               gatingThreshold = getGradingThreshold({ midi: cursorMidi })
               
-              // Check if we're accurate against the cursor note
-              const isAccurateAgainstCursor = awaitingFirstCorrectRef.current && 
-                cursorCents != null && 
-                Math.abs(cursorCents) <= gatingThreshold && 
-                !!cursorHz
-              
-              if (isAccurateAgainstCursor) {
-                if (stableForMsRef.t === 0) stableForMsRef.t = stableTime
-                if (stableTime - stableForMsRef.t > 250) {
-                  setAwaitingFirstCorrect(false)
-                  awaitingFirstCorrectRef.current = false
-                  // Switch gating to cursor-driven by clearing first-note target
-                  setFirstNoteMidi(null)
-                  // Ensure cursor is on first graphical note at start
-                  ensureCursorOnNote(cursor)
-                  startTransport()
-                }
-              } else {
-                stableForMsRef.t = 0
-              }
+                             // Check if we're accurate against the cursor note
+               const isAccurateAgainstCursor = awaitingFirstCorrectRef.current && 
+                 cursorCents != null && 
+                 Math.abs(cursorCents) <= gatingThreshold && 
+                 !!cursorHz
+               
+               // Debug gating
+               if (awaitingFirstCorrectRef.current && hasPitch) {
+                 console.log(`🎯 Gating: freq=${freq.toFixed(1)}Hz, target=${cursorMidi}(${midiToName(cursorMidi)}), cents=${cursorCents?.toFixed(1)}, threshold=${gatingThreshold}, accurate=${isAccurateAgainstCursor}`)
+               }
+               
+               if (isAccurateAgainstCursor) {
+                 if (stableForMsRef.t === 0) stableForMsRef.t = stableTime
+                 if (stableTime - stableForMsRef.t > 250) {
+                   console.log(`🚀 Starting transport! Accurate for 250ms`)
+                   setAwaitingFirstCorrect(false)
+                   awaitingFirstCorrectRef.current = false
+                   // Switch gating to cursor-driven by clearing first-note target
+                   setFirstNoteMidi(null)
+                   // Ensure cursor is on first graphical note at start
+                   ensureCursorOnNote(cursor)
+                   startTransport()
+                 }
+               } else {
+                 stableForMsRef.t = 0
+               }
             }
           }
         }
