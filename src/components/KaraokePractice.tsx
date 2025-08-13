@@ -1003,6 +1003,9 @@ export default function KaraokePractice() {
         }
       }
     }
+    
+    // Reset sequence index to align with the new cursor position
+    currentStepIndexRef.current = 0
     setStatus('Ready')
   }, [stopListening, stopTransport, stopMetronome, ensureCursorOnNote, bpm, a4FrequencyHz, positionCursorToMeasureFirstNote])
 
@@ -1024,6 +1027,35 @@ export default function KaraokePractice() {
     cursor.show()
     ensureCursorOnNote(cursor)
     console.log('Transport starting from current cursor position at measure', (cursor as any)?.Iterator?.CurrentMeasureIndex + 1)
+    
+    // CRITICAL FIX: Align the sequence index with the cursor's current position
+    // Find the sequence index that matches the current cursor note
+    const seq = scoreMidiSequenceRef.current
+    const currentNotes = getNotesUnderCursor(cursor as any)
+    const currentNote = selectPrimaryNoteFromArray(currentNotes)
+    const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
+    
+    if (currentMidi !== null && seq.length > 0) {
+      // Find the first occurrence of this MIDI in the sequence
+      let foundIndex = -1
+      for (let i = 0; i < seq.length; i++) {
+        if (seq[i]?.midi === currentMidi) {
+          foundIndex = i
+          break
+        }
+      }
+      
+      if (foundIndex >= 0) {
+        currentStepIndexRef.current = foundIndex
+        console.log(`✅ Aligned sequence index to ${foundIndex} for note ${midiToName(currentMidi)}`)
+      } else {
+        console.log(`⚠️ Could not find note ${midiToName(currentMidi)} in sequence, starting from beginning`)
+        currentStepIndexRef.current = 0
+      }
+    } else {
+      console.log(`⚠️ Could not determine current note, starting from beginning`)
+      currentStepIndexRef.current = 0
+    }
     const step = () => {
       const seq = scoreMidiSequenceRef.current
       const anyCursor = cursor as any
