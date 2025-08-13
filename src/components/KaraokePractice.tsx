@@ -1210,15 +1210,22 @@ export default function KaraokePractice() {
       if (targetMidi == null) {
         // Only set target if none was set by jumpToMeasure
         const currentCursor = osmdRef.current?.cursor
-        if (currentCursor) {
-          const notes = getNotesUnderCursor(currentCursor as any)
-          const currentNote = selectPrimaryNoteFromArray(notes)
-          const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
-          if (currentMidi !== null) {
-            targetMidi = currentMidi
-            console.log(`🎯 Listen: No target set, using cursor note ${midiToName(currentMidi)}`)
-          }
+              if (currentCursor) {
+        const notes = getNotesUnderCursor(currentCursor as any)
+        console.log(`🎯 Listen: Notes under cursor:`, notes.length, notes.map(n => {
+          const midi = midiFromGraphicalNote(n)
+          return midi !== null ? midiToName(midi) : 'null'
+        }))
+        
+        const currentNote = selectPrimaryNoteFromArray(notes)
+        const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
+        console.log(`🎯 Listen: Selected note:`, currentNote ? midiToName(currentMidi!) : 'null')
+        
+        if (currentMidi !== null) {
+          targetMidi = currentMidi
+          console.log(`🎯 Listen: No target set, using cursor note ${midiToName(currentMidi)}`)
         }
+      }
         
         // Fallback to first note if still no target
         if (targetMidi == null) {
