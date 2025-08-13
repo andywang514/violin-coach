@@ -1358,84 +1358,94 @@ export default function KaraokePractice() {
 
 
 
-  // Jump to specific measure number using XML sequence for accurate positioning
+  // Jump to specific measure number using OSMD's measure information
   const jumpToMeasure = useCallback(() => {
     if (!osmdRef.current) return
     
-    console.log(`Jumping to measure ${measureNumber} using XML sequence...`)
+    console.log(`Jumping to measure ${measureNumber} using OSMD...`)
     
     const osmd = osmdRef.current
     const cursor = osmd.cursor
-    const seq = scoreMidiSequenceRef.current
-    const boundaries = measureBoundariesRef.current
     
-    if (!cursor || !seq || !boundaries) {
-      setStatus('Score not loaded properly')
-      return
-    }
-    
-    // Find the note index for the start of the target measure
-    const measureIndex = measureNumber - 1 // Convert to 0-based index
-    if (measureIndex < 0 || measureIndex >= boundaries.length) {
-      setStatus(`Invalid measure number: ${measureNumber}`)
-      return
-    }
-    
-    const startNoteIndex = boundaries[measureIndex]
-    const targetNote = seq[startNoteIndex]
-    
-    if (!targetNote) {
-      setStatus(`Could not find note at measure ${measureNumber}`)
-      return
-    }
-    
-    console.log(`Measure ${measureNumber} starts at note index ${startNoteIndex}: ${midiToName(targetNote.midi)}`)
-    
-    // Reset cursor and advance to the target note
-    cursor.reset()
-    let steps = 0
-    let guard = 0
-    
-    while (guard++ < 4096 && steps < startNoteIndex) {
-      const notes = getNotesUnderCursor(cursor as any)
-      if (notes.length > 0) {
-        const currentNote = selectPrimaryNoteFromArray(notes)
-        const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
-        
-        if (currentMidi === targetNote.midi) {
-          console.log(`Found target note ${midiToName(currentMidi)} at step ${steps}`)
-          break
+    if (cursor) {
+      // Determine the exact first timestamp of the target measure that has notes
+      const firstTs = getFirstNoteTimestampForMeasure(osmd as any, measureNumber)
+      cursor.reset()
+      let guard = 0
+      while (guard++ < 4096) {
+        const curMeasure = (cursor.Iterator?.CurrentMeasureIndex || 0) + 1
+        const curTs = getTimestampReal((cursor as any)?.Iterator?.CurrentTimeStamp)
+        if (curMeasure > measureNumber) break
+        if (curMeasure === measureNumber) {
+          if (firstTs == null || (typeof curTs === 'number' && curTs >= firstTs)) break
         }
-        steps++
+        cursor.next()
       }
-      cursor.next()
-    }
-    
-    // Ensure cursor is on a note
-    ensureCursorOnNote(cursor)
-    cursor.show()
-    
-    // Verify final position
-    const finalNotes = getNotesUnderCursor(cursor as any)
-    const finalNote = selectPrimaryNoteFromArray(finalNotes)
-    const finalMidi = finalNote ? midiFromGraphicalNote(finalNote) : null
-    const finalMeasure = (cursor as any)?.Iterator?.CurrentMeasureIndex + 1
-    
-    console.log(`Final position: measure ${finalMeasure}, note ${finalMidi ? midiToName(finalMidi) : 'null'}`)
-    console.log(`Expected: measure ${measureNumber}, note ${midiToName(targetNote.midi)}`)
-    
-    // Sync UI state
-    setCurrentMeasure(finalMeasure)
-    setMeasureNumber(finalMeasure)
-    
-    // Set target to the expected note from XML sequence
-    const hz = midiToFrequency(targetNote.midi, a4FrequencyHz)
-    setTargetInfo({ midi: targetNote.midi, hz, name: midiToName(targetNote.midi) })
-    
-    if (finalMidi === targetNote.midi) {
-      setStatus(`✅ Positioned at measure ${measureNumber}, note ${midiToName(targetNote.midi)}`)
+      // Ensure we are on a note within the same measure
+      {
+        let tries = 0
+        while (tries++ < 256) {
+          const curMeasure = (cursor.Iterator?.CurrentMeasureIndex || 0) + 1
+          if (curMeasure !== measureNumber) break
+          const notes = getNotesUnderCursor(cursor as any)
+          if (notes?.length) break
+          cursor.next()
+        }
+      }
+      cursor.show()
+      
+      // Debug: show position after scan
+      const debugMeasure = cursor.Iterator?.CurrentMeasureIndex || 0
+      const debugNotes = getNotesUnderCursor(cursor as any)
+      const debugNote = selectPrimaryNoteFromArray(debugNotes)
+      const debugMidi = debugNote ? midiFromGraphicalNote(debugNote) : null
+      console.log(`Final position: measure ${debugMeasure + 1}, note ${debugMidi ? midiToName(debugMidi) : 'null'}`)
+
+      // Get the note at the target position (post-scan)
+      const notes = getNotesUnderCursor(cursor as any)
+      const currentNote = selectPrimaryNoteFromArray(notes)
+      const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
+      const finalMeasure = cursor.Iterator?.CurrentMeasureIndex || 0
+      
+      console.log(`Cursor positioned at: measure ${finalMeasure + 1}, note ${currentMidi ? midiToName(currentMidi) : 'null'}`)
+      // Sync UI state with actual OSMD position immediately
+      setCurrentMeasure(finalMeasure + 1)
+      setMeasureNumber(finalMeasure + 1)
+      console.log(`Notes under cursor:`, notes.length, notes.map(n => {
+        const midi = midiFromGraphicalNote(n)
+        return midi !== null ? midiToName(midi) : 'null'
+      }))
+      
+      // Debug: Show raw note data
+      if (notes.length > 0) {
+        console.log(`Raw note data:`, {
+          sourceNote: currentNote?.sourceNote,
+          halfTone: currentNote?.sourceNote?.halfTone,
+          pitch: currentNote?.sourceNote?.pitch,
+          fundamentalNote: currentNote?.sourceNote?.pitch?.FundamentalNote,
+          octave: currentNote?.sourceNote?.pitch?.Octave,
+          accidental: currentNote?.sourceNote?.pitch?.AccidentalHalfTone
+        })
+      }
+      
+      // CRITICAL FIX: Always set target to match the cursor position
+      if (currentMidi !== null) {
+        const hz = midiToFrequency(currentMidi, a4FrequencyHz)
+        const targetName = midiToName(currentMidi)
+        
+        console.log(`Setting target: midi=${currentMidi}, name=${targetName}, hz=${hz}`)
+        setTargetInfo({ midi: currentMidi, hz, name: targetName })
+        lastTargetMidiRef.current = currentMidi
+        
+        setStatus(`Starting point set to measure ${finalMeasure + 1}, note ${targetName}`)
+        
+        // Verify this is actually the first note of the measure
+        console.log(`Target set to: measure ${finalMeasure + 1}, first note: ${targetName}`)
+      } else {
+        setStatus(`Could not determine note at measure ${finalMeasure + 1}`)
+      }
     } else {
-      setStatus(`⚠️ Near measure ${measureNumber}, target: ${midiToName(targetNote.midi)}`)
+      setStatus('No cursor available')
     }
   }, [measureNumber, a4FrequencyHz])
 
