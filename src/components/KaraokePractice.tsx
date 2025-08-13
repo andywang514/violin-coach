@@ -1304,22 +1304,47 @@ export default function KaraokePractice() {
         // Require a brief stability before starting transport
         const stableForMsRef = (listen as any)._stableForMsRef || ((listen as any)._stableForMsRef = { t: 0 })
         const stableTime = performance.now()
-        const threshold = getGradingThreshold(midiSeqTarget)
-        const isAccurate = awaitingFirstCorrectRef.current && rawCents != null && Math.abs(rawCents) <= threshold && !!gatingTargetHz
-        if (isAccurate) {
-          if (stableForMsRef.t === 0) stableForMsRef.t = stableTime
-          if (stableTime - stableForMsRef.t > 250) {
-            setAwaitingFirstCorrect(false)
-            awaitingFirstCorrectRef.current = false
-            // Switch gating to cursor-driven by clearing first-note target
-            setFirstNoteMidi(null)
-            // Ensure cursor is on first graphical note at start
-            const cursor = osmdRef.current?.cursor
-            if (cursor) ensureCursorOnNote(cursor)
-            startTransport()
-          }
+        
+        // FIXED: Use the actual cursor note for gating, not the sequence target
+        let gatingThreshold = 50 // default threshold
+        if (isTransportRunningRef.current) {
+          // Transport is running - use sequence target
+          gatingThreshold = getGradingThreshold(midiSeqTarget)
         } else {
-          stableForMsRef.t = 0
+          // Transport is idle - use cursor note for gating
+          const cursor = osmdRef.current?.cursor
+          if (cursor) {
+            const cursorNotes = getNotesUnderCursor(cursor as any)
+            const cursorNote = selectPrimaryNoteFromArray(cursorNotes)
+            const cursorMidi = cursorNote ? midiFromGraphicalNote(cursorNote) : null
+            if (cursorMidi !== null) {
+              // Use the cursor note for gating when idle
+              const cursorHz = midiToFrequency(cursorMidi, a4FrequencyHz)
+              const cursorCents = hasPitch && cursorHz ? computeCentsOffset(freq, cursorHz) : null
+              gatingThreshold = getGradingThreshold({ midi: cursorMidi })
+              
+              // Check if we're accurate against the cursor note
+              const isAccurateAgainstCursor = awaitingFirstCorrectRef.current && 
+                cursorCents != null && 
+                Math.abs(cursorCents) <= gatingThreshold && 
+                !!cursorHz
+              
+              if (isAccurateAgainstCursor) {
+                if (stableForMsRef.t === 0) stableForMsRef.t = stableTime
+                if (stableTime - stableForMsRef.t > 250) {
+                  setAwaitingFirstCorrect(false)
+                  awaitingFirstCorrectRef.current = false
+                  // Switch gating to cursor-driven by clearing first-note target
+                  setFirstNoteMidi(null)
+                  // Ensure cursor is on first graphical note at start
+                  ensureCursorOnNote(cursor)
+                  startTransport()
+                }
+              } else {
+                stableForMsRef.t = 0
+              }
+            }
+          }
         }
         rafRef.current = requestAnimationFrame(tick)
       }
