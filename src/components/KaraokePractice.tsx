@@ -1028,18 +1028,16 @@ export default function KaraokePractice() {
     ensureCursorOnNote(cursor)
     console.log('Transport starting from current cursor position at measure', (cursor as any)?.Iterator?.CurrentMeasureIndex + 1)
     
-    // CRITICAL FIX: Align the sequence index with the cursor's current position
-    // Find the sequence index that matches the current cursor note
+    // CRITICAL FIX: Align the sequence index with the preserved target (not cursor note)
+    // Use the target that was set by jumpToMeasure for accurate alignment
     const seq = scoreMidiSequenceRef.current
-    const currentNotes = getNotesUnderCursor(cursor as any)
-    const currentNote = selectPrimaryNoteFromArray(currentNotes)
-    const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
+    const targetMidi = targetInfo.midi ?? lastTargetMidiRef.current
     
-    if (currentMidi !== null && seq.length > 0) {
-      // Find the first occurrence of this MIDI in the sequence
+    if (targetMidi !== null && seq.length > 0) {
+      // Find the first occurrence of the target MIDI in the sequence
       let foundIndex = -1
       for (let i = 0; i < seq.length; i++) {
-        if (seq[i]?.midi === currentMidi) {
+        if (seq[i]?.midi === targetMidi) {
           foundIndex = i
           break
         }
@@ -1047,13 +1045,13 @@ export default function KaraokePractice() {
       
       if (foundIndex >= 0) {
         currentStepIndexRef.current = foundIndex
-        console.log(`✅ Aligned sequence index to ${foundIndex} for note ${midiToName(currentMidi)}`)
+        console.log(`✅ Aligned sequence index to ${foundIndex} for target note ${midiToName(targetMidi)}`)
       } else {
-        console.log(`⚠️ Could not find note ${midiToName(currentMidi)} in sequence, starting from beginning`)
+        console.log(`⚠️ Could not find target note ${midiToName(targetMidi)} in sequence, starting from beginning`)
         currentStepIndexRef.current = 0
       }
     } else {
-      console.log(`⚠️ Could not determine current note, starting from beginning`)
+      console.log(`⚠️ No target note available, starting from beginning`)
       currentStepIndexRef.current = 0
     }
     const step = () => {
