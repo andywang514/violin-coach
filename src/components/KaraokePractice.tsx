@@ -1204,27 +1204,32 @@ export default function KaraokePractice() {
         }
       }
       
-      // Determine target for UI and gating without overriding an existing target from Jump
+      // CRITICAL FIX: Always use the current cursor note as the target
       const currentCursor = osmdRef.current?.cursor
-      let targetMidi: number | null = targetInfo.midi ?? null
-      if (targetMidi == null && currentCursor) {
+      let targetMidi: number | null = null
+      
+      if (currentCursor) {
         const notes = getNotesUnderCursor(currentCursor as any)
         const currentNote = selectPrimaryNoteFromArray(notes)
         const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
         if (currentMidi !== null) {
           targetMidi = currentMidi
-          console.log(`Listen: Using cursor note ${midiToName(currentMidi)} as target`)
+          console.log(`🎯 Listen: Setting target to cursor note ${midiToName(currentMidi)}`)
         }
       }
-      if (targetMidi == null) targetMidi = firstNoteMidi
+      
+      // Fallback to existing target if cursor note couldn't be determined
+      if (targetMidi == null) {
+        targetMidi = targetInfo.midi ?? firstNoteMidi
+        console.log(`🎯 Listen: Using fallback target ${targetMidi ? midiToName(targetMidi) : 'null'}`)
+      }
       
       if (targetMidi != null) {
         const hz = midiToFrequency(targetMidi, a4FrequencyHz)
-        // Only update UI target if it was previously unset, to avoid visual jumps
-        if (targetInfo.midi == null) {
-          setTargetInfo({ midi: targetMidi, hz, name: midiToName(targetMidi) })
-        }
+        // Always update target to match cursor position
+        setTargetInfo({ midi: targetMidi, hz, name: midiToName(targetMidi) })
         lastTargetMidiRef.current = targetMidi
+        console.log(`🎯 Listen: Final target set to ${midiToName(targetMidi)}`)
       }
       
       // Start metronome immediately if enabled
