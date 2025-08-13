@@ -1318,45 +1318,41 @@ export default function KaraokePractice() {
         if (isTransportRunningRef.current) {
           // Transport is running - use sequence target
           gatingThreshold = getGradingThreshold(midiSeqTarget)
-        } else {
-          // Transport is idle - use cursor note for gating
-          const cursor = osmdRef.current?.cursor
-          if (cursor) {
-            const cursorNotes = getNotesUnderCursor(cursor as any)
-            const cursorNote = selectPrimaryNoteFromArray(cursorNotes)
-            const cursorMidi = cursorNote ? midiFromGraphicalNote(cursorNote) : null
-            if (cursorMidi !== null) {
-              // Use the cursor note for gating when idle
-              const cursorHz = midiToFrequency(cursorMidi, a4FrequencyHz)
-              const cursorCents = hasPitch && cursorHz ? computeCentsOffset(freq, cursorHz) : null
-              gatingThreshold = getGradingThreshold({ midi: cursorMidi })
-              
-                             // Check if we're accurate against the cursor note
-               const isAccurateAgainstCursor = awaitingFirstCorrectRef.current && 
-                 cursorCents != null && 
-                 Math.abs(cursorCents) <= gatingThreshold && 
-                 !!cursorHz
-               
-               // Debug gating
-               if (awaitingFirstCorrectRef.current && hasPitch) {
-                 console.log(`🎯 Gating: freq=${freq.toFixed(1)}Hz, target=${cursorMidi}(${midiToName(cursorMidi)}), cents=${cursorCents?.toFixed(1)}, threshold=${gatingThreshold}, accurate=${isAccurateAgainstCursor}`)
-               }
-               
-               if (isAccurateAgainstCursor) {
-                 if (stableForMsRef.t === 0) stableForMsRef.t = stableTime
-                 if (stableTime - stableForMsRef.t > 250) {
-                   console.log(`🚀 Starting transport! Accurate for 250ms`)
-                   setAwaitingFirstCorrect(false)
-                   awaitingFirstCorrectRef.current = false
-                   // Switch gating to cursor-driven by clearing first-note target
-                   setFirstNoteMidi(null)
-                   // Ensure cursor is on first graphical note at start
-                   ensureCursorOnNote(cursor)
-                   startTransport()
-                 }
-               } else {
-                 stableForMsRef.t = 0
-               }
+                } else {
+          // Transport is idle - use the preserved target for gating (not cursor note)
+          const preservedTarget = targetInfo.midi ?? lastTargetMidiRef.current
+          if (preservedTarget !== null) {
+            // Use the preserved target for gating when idle
+            const targetHz = midiToFrequency(preservedTarget, a4FrequencyHz)
+            const targetCents = hasPitch && targetHz ? computeCentsOffset(freq, targetHz) : null
+            gatingThreshold = getGradingThreshold({ midi: preservedTarget })
+            
+            // Check if we're accurate against the preserved target
+            const isAccurateAgainstTarget = awaitingFirstCorrectRef.current && 
+              targetCents != null && 
+              Math.abs(targetCents) <= gatingThreshold && 
+              !!targetHz
+            
+            // Debug gating
+            if (awaitingFirstCorrectRef.current && hasPitch) {
+              console.log(`🎯 Gating: freq=${freq.toFixed(1)}Hz, target=${preservedTarget}(${midiToName(preservedTarget)}), cents=${targetCents?.toFixed(1)}, threshold=${gatingThreshold}, accurate=${isAccurateAgainstTarget}`)
+            }
+            
+            if (isAccurateAgainstTarget) {
+              if (stableForMsRef.t === 0) stableForMsRef.t = stableTime
+              if (stableTime - stableForMsRef.t > 250) {
+                console.log(`🚀 Starting transport! Accurate for 250ms`)
+                setAwaitingFirstCorrect(false)
+                awaitingFirstCorrectRef.current = false
+                // Switch gating to cursor-driven by clearing first-note target
+                setFirstNoteMidi(null)
+                // Ensure cursor is on first graphical note at start
+                const cursor = osmdRef.current?.cursor
+                if (cursor) ensureCursorOnNote(cursor)
+                startTransport()
+              }
+            } else {
+              stableForMsRef.t = 0
             }
           }
         }
