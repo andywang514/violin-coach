@@ -1204,32 +1204,38 @@ export default function KaraokePractice() {
         }
       }
       
-      // CRITICAL FIX: Always use the current cursor note as the target
-      const currentCursor = osmdRef.current?.cursor
-      let targetMidi: number | null = null
+      // CRITICAL FIX: Preserve the target set by jumpToMeasure, don't override it
+      let targetMidi: number | null = targetInfo.midi ?? null
       
-      if (currentCursor) {
-        const notes = getNotesUnderCursor(currentCursor as any)
-        const currentNote = selectPrimaryNoteFromArray(notes)
-        const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
-        if (currentMidi !== null) {
-          targetMidi = currentMidi
-          console.log(`🎯 Listen: Setting target to cursor note ${midiToName(currentMidi)}`)
-        }
-      }
-      
-      // Fallback to existing target if cursor note couldn't be determined
       if (targetMidi == null) {
-        targetMidi = targetInfo.midi ?? firstNoteMidi
-        console.log(`🎯 Listen: Using fallback target ${targetMidi ? midiToName(targetMidi) : 'null'}`)
-      }
-      
-      if (targetMidi != null) {
-        const hz = midiToFrequency(targetMidi, a4FrequencyHz)
-        // Always update target to match cursor position
-        setTargetInfo({ midi: targetMidi, hz, name: midiToName(targetMidi) })
+        // Only set target if none was set by jumpToMeasure
+        const currentCursor = osmdRef.current?.cursor
+        if (currentCursor) {
+          const notes = getNotesUnderCursor(currentCursor as any)
+          const currentNote = selectPrimaryNoteFromArray(notes)
+          const currentMidi = currentNote ? midiFromGraphicalNote(currentNote) : null
+          if (currentMidi !== null) {
+            targetMidi = currentMidi
+            console.log(`🎯 Listen: No target set, using cursor note ${midiToName(currentMidi)}`)
+          }
+        }
+        
+        // Fallback to first note if still no target
+        if (targetMidi == null) {
+          targetMidi = firstNoteMidi
+          console.log(`🎯 Listen: Using fallback target ${targetMidi ? midiToName(targetMidi) : 'null'}`)
+        }
+        
+        if (targetMidi != null) {
+          const hz = midiToFrequency(targetMidi, a4FrequencyHz)
+          setTargetInfo({ midi: targetMidi, hz, name: midiToName(targetMidi) })
+          lastTargetMidiRef.current = targetMidi
+          console.log(`🎯 Listen: Final target set to ${midiToName(targetMidi)}`)
+        }
+      } else {
+        // Target was already set by jumpToMeasure, preserve it
+        console.log(`🎯 Listen: Preserving existing target ${midiToName(targetMidi)}`)
         lastTargetMidiRef.current = targetMidi
-        console.log(`🎯 Listen: Final target set to ${midiToName(targetMidi)}`)
       }
       
       // Start metronome immediately if enabled
